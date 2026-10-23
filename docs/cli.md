@@ -20,7 +20,8 @@ glucose-process [INPUT_FOLDERS]... [OPTIONS]
 | Option | Shorthand | Description |
 |--------|-----------|-------------|
 | `--config` | `-c` | Path to a YAML configuration file. Auto-loaded from `glucose_config.yaml` if present. |
-| `--output` | `-o` | Filename for the final ML-ready CSV (placed in the `OUTPUT/` folder). |
+| `--output` | `-o` | Filename for the final ML-ready dataset (placed in the `OUTPUT/` folder). A `.parquet` name writes parquet, any other name CSV. |
+| `--database-type` | `-t` | Read every input as this database type instead of detecting it, e.g. `cgm_format` (default: config `database_type`, else detected). |
 | `--interval` | `-i` | Time discretization interval (minutes). |
 | `--gap-max` | `-g` | Max gap size to interpolate (minutes). |
 | `--min-length` | `-l` | Minimum sequence length to preserve. |

@@ -45,6 +45,35 @@ warnings.filterwarnings('ignore')
 DEFAULT_STREAMING_MAX_BUFFER_MB = 256
 DEFAULT_STREAMING_FLUSH_MAX_USERS = 10
 MIN_BUFFER_MB = 32
+PARQUET_SUFFIX = ".parquet"
+PARTIAL_CSV_SUFFIX = ".partial.csv"
+STATS_SUFFIX = ".txt"
+
+
+def _is_parquet_output(output_file: Optional[Path]) -> bool:
+    return output_file is not None and output_file.suffix.lower() == PARQUET_SUFFIX
+
+
+def _partial_csv_for(parquet_file: Path) -> Path:
+    """The CSV the pipeline streams into before it becomes ``parquet_file``."""
+    return parquet_file.with_name(parquet_file.name + PARTIAL_CSV_SUFFIX)
+
+
+def _finalize_parquet(partial_csv: Path, parquet_file: Path) -> None:
+    """
+    Turn the pipeline's CSV into ``parquet_file`` and drop the CSV.
+
+    Every writer in the pipeline appends CSV (per user, per database), so parquet is produced
+    once at the end from the finished CSV: the values are the CSV's, with typed columns
+    (timestamp as Datetime, numbers as numbers, empty strings as nulls). Types are inferred
+    from the whole file, so a field that is empty in its first rows still reads as numeric.
+    """
+    pl.scan_csv(partial_csv, infer_schema_length=None, try_parse_dates=True).sink_parquet(parquet_file)
+    partial_csv.unlink()
+    partial_stats = partial_csv.with_suffix(STATS_SUFFIX)
+    if partial_stats.exists():
+        partial_stats.replace(parquet_file.with_suffix(STATS_SUFFIX))
+    logger.info(f"Final processed data written as parquet: {parquet_file}")
 
 
 def _run_processing_pipeline(
@@ -310,6 +339,7 @@ class GlucoseMLPreprocessor:
             output_file=cli_overrides.get('output_file', config.get('output_file', None)),
             print_statistics=cli_overrides.get('print_statistics', config.get('print_statistics', True)),
             max_workers=cli_overrides.get('max_workers', config.get('max_workers', None)),
+            database_type=cli_overrides.get('database_type', config.get('database_type', None)),
         )
     
     @staticmethod
@@ -346,6 +376,7 @@ class GlucoseMLPreprocessor:
         output_file: Optional[str] = None,
         print_statistics: bool = True,
         max_workers: Optional[int] = None,
+        database_type: Optional[str] = None,
     ) -> None:
         self.expected_interval_minutes = expected_interval_minutes
         self.small_gap_max_minutes = small_gap_max_minutes
@@ -364,6 +395,8 @@ class GlucoseMLPreprocessor:
         self.round_precision = round_precision
         self.output_file = Path(output_file) if output_file else None
         self.print_statistics = print_statistics
+        # Read every input as this database type instead of detecting it (None: detect).
+        self.database_type = database_type
         if max_workers is not None and max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {max_workers}")
         # Concurrent per-user workers; None means one per CPU core.
@@ -732,10 +765,21 @@ class GlucoseMLPreprocessor:
         return placeholder, stats, current_last_sequence_id
 
 
-    def consolidate_glucose_data(self, data_folder: Path, output_file: Optional[Path] = None) -> pl.DataFrame:
+    def resolve_database_type(self, data_folder: Union[str, Path]) -> str:
+        """The configured ``database_type`` if one is set, else the type detected for ``data_folder``."""
         db_detector = DatabaseDetector()
-        database_type = db_detector.detect_database_type(data_folder)
-        logger.info(f"Detected database type: {database_type}")
+        if self.database_type is None:
+            return db_detector.detect_database_type(data_folder)
+        supported = db_detector.get_supported_database_types()
+        if self.database_type not in supported:
+            raise ValueError(f"database_type={self.database_type!r}; expected one of {supported}")
+        return self.database_type
+
+    def consolidate_glucose_data(self, data_folder: Path, output_file: Optional[Path] = None, database_type: Optional[str] = None) -> pl.DataFrame:
+        db_detector = DatabaseDetector()
+        if database_type is None:
+            database_type = self.resolve_database_type(data_folder)
+        logger.info(f"Database type: {database_type}")
         
         if database_type == 'unknown':
             raise ValueError(f"Could not detect database type for folder: {data_folder}")
@@ -783,14 +827,21 @@ class GlucoseMLPreprocessor:
     def process(self, csv_folder: Union[str, Path], output_file: Optional[Path] = None, last_sequence_id: int = 0, database_type: Optional[str] = None, append: bool = False, dataset_name: Optional[str] = None, quiet: bool = False) -> Tuple[pl.DataFrame, Dict[str, Any], int]:
         # Ensure csv_folder is a Path object
         csv_folder = Path(csv_folder)
-        
+
+        if _is_parquet_output(output_file):
+            if append:
+                raise ValueError(f"Appending needs a CSV output, got {output_file}; process_multiple_databases writes parquet itself")
+            partial_csv = _partial_csv_for(output_file)
+            result = self.process(csv_folder, partial_csv, last_sequence_id, database_type, append, dataset_name, quiet)
+            _finalize_parquet(partial_csv, output_file)
+            return result
+
         if not quiet:
             logger.info(f"Starting glucose data preprocessing for {csv_folder.name}...")
-        
+
         if database_type is None:
-            db_detector = DatabaseDetector()
-            database_type = db_detector.detect_database_type(csv_folder)
-            
+            database_type = self.resolve_database_type(csv_folder)
+
         field_categories_dict = extract_field_categories(database_type) if database_type != 'unknown' else None
         self._field_categories_dict = field_categories_dict
         
@@ -818,7 +869,7 @@ class GlucoseMLPreprocessor:
         else:
             if not quiet:
                 logger.info("STEP 1: Consolidating CSV files (mandatory step)...")
-            df = self.consolidate_glucose_data(csv_folder)
+            df = self.consolidate_glucose_data(csv_folder, database_type=database_type)
             
             # Use common processing pipeline for steps 2-8 (handles last_step internally)
             expected_standard_cols = self._compute_expected_output_columns([database_type], use_display_names=False)
@@ -886,6 +937,12 @@ class GlucoseMLPreprocessor:
             logger.error(f"Failed to save statistics to {stats_file}: {e}")
 
     def process_multiple_databases(self, csv_folders: List[Path], output_file: Optional[Path] = None, last_sequence_id: int = 0) -> Tuple[pl.DataFrame, Dict[str, Any], int]:
+        if _is_parquet_output(output_file):
+            partial_csv = _partial_csv_for(output_file)
+            result = self.process_multiple_databases(csv_folders, partial_csv, last_sequence_id)
+            _finalize_parquet(partial_csv, output_file)
+            return result
+
         logger.info(f"Starting multi-database processing for {len(csv_folders)} databases...")
         
         all_statistics: List[Dict[str, Any]] = []

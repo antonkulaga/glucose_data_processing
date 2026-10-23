@@ -13,6 +13,7 @@ The `GlucoseMLPreprocessor` is governed by a YAML configuration file (typically 
 | `glucose_only` | bool | false | If true, drops all non-glucose fields and non-glucose records. |
 | `round_precision` | int | 3 | Number of digits after the decimal point to round numeric fields. Can be negative. |
 | `save_intermediate_files` | bool | false | If true, exports CSVs at each stage of the pipeline for debugging. |
+| `database_type` | string | detected | Read every input as this database type instead of detecting it, e.g. `cgm_format` to read Dexcom Clarity exports through cgm_format. Must be a supported type. CLI: `--database-type`. |
 | `max_workers` | int | CPU count | Users processed concurrently (threads). On a shared login node set this low, and cap Polars' own thread pool with the `POLARS_MAX_THREADS` environment variable; the two are independent. CLI: `--workers`. |
 
 ## Calibration Settings
@@ -29,6 +30,7 @@ The `GlucoseMLPreprocessor` is governed by a YAML configuration file (typically 
 The default path where the processed dataset will be saved.
 - **Type**: string (path)
 - **Default**: not set – filename is generated from the input folder name (e.g., `OUTPUT/uom_ml_ready.csv`).
+- A name ending in `.parquet` writes parquet (typed columns, timestamp as Datetime); any other name writes CSV.
 
 ### `output_fields`
 A list of standardized field names to include in the final CSV. Fields excluded from this list will be dropped during the final preparation step.

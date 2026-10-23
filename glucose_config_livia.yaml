@@ -1,0 +1,53 @@
+# Livia's Dexcom Clarity exports (G6) -> glucose + insulin dataset for glucose prediction
+# - Input: a folder of native Clarity CSV exports of one person, overlapping in time
+# - Read through the cgm_format backend (forced, since the native dexcom converter also
+#   recognises Clarity files); records repeated across overlapping exports are dropped
+# - Insulin arrives as Clarity "Insulin" event rows and is split by subtype:
+#   Fast-Acting -> fast_acting_insulin_u, Long-Acting -> long_acting_insulin_u (units, U)
+# - Glucose is mg/dL; Clarity "High"/"Low" readings become the dexcom bounds below
+# - Usage (run from the folder that should receive OUTPUT/):
+#   uv run --project <repo> glucose-process <clarity_folder> -c <repo>/glucose_config_livia.yaml
+
+database_type: cgm_format
+
+# General preprocessing settings
+expected_interval_minutes: 5
+small_gap_max_minutes: 15
+min_sequence_len: 200
+save_intermediate_files: false
+create_fixed_frequency: true
+glucose_only: false
+round_precision: 3
+
+output_file: "livia_glucose_insulin.parquet"
+
+# Output filtering
+restrict_output_to_config_fields: true
+service_fields_allowlist:
+  - "timestamp"
+  - "event_type"
+  - "user_id"
+
+output_fields:
+  - "timestamp"
+  - "event_type"
+  - "user_id"
+  - "glucose_value_mgdl"
+  - "fast_acting_insulin_u"
+  - "long_acting_insulin_u"
+  - "carb_grams"
+
+# Keep standard (snake_case) names in the output: the units are already in the names
+field_to_display_name_map:
+  timestamp: "timestamp"
+  event_type: "event_type"
+  user_id: "user_id"
+  glucose_value_mgdl: "glucose_value_mgdl"
+  fast_acting_insulin_u: "fast_acting_insulin_u"
+  long_acting_insulin_u: "long_acting_insulin_u"
+  carb_grams: "carb_grams"
+
+# Clarity writes "High"/"Low" outside the G6 range (40-400 mg/dL)
+dexcom:
+  high_glucose_value: 401
+  low_glucose_value: 39

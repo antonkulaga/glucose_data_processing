@@ -2,6 +2,22 @@
 
 Newest first.
 
+## Unreleased — forced database type, parquet output (2026-10-23)
+
+### Added
+- `database_type` config key and `--database-type`/`-t` CLI option: read every input as the
+  named type instead of detecting it. Lets a Dexcom Clarity export, which the detector sends
+  to the native `dexcom` converter, go through the `cgm_format` backend. Unknown types fail.
+- A `.parquet` output name (`-o x.parquet` or config `output_file`) writes parquet: the
+  pipeline's CSV, converted at the end with typed columns (timestamp as Datetime). The
+  statistics file sits beside it as `x.txt`, as for CSV.
+- `glucose_config_livia.yaml`: glucose + fast/long-acting insulin + carbs from a folder of
+  overlapping Clarity exports of one person, via cgm_format, to parquet.
+
+### Changed
+- cgm-format 0.12.2 -> 0.13.0 (its Dexcom parser module is unchanged; the parity tests pass
+  as before). Native `dexcom` output on `test_data/dexcom_small` is byte-identical.
+
 ## Unreleased — cgm_format input backend (2026-09-24)
 
 ### Added

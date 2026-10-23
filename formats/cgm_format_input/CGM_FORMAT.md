@@ -2,7 +2,10 @@
 
 Reads inputs through the [cgm-format](https://github.com/GlucoseDAO/cgm_format) library
 (`FormatParser`) and maps its unified frames onto this pipeline's fields. The detector uses
-it only when no native converter recognises the input (docs/DECISIONS.md D3).
+it only when no native converter recognises the input (docs/DECISIONS.md D3). To read an input
+a native converter also recognises (a Dexcom Clarity export) through cgm_format, set
+`database_type: cgm_format` in the config or pass `--database-type cgm_format`
+(`glucose_config_livia.yaml` does this for a folder of Clarity exports with insulin).
 
 ## Inputs
 

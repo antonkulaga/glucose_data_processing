@@ -375,14 +375,14 @@ wheels = [
 
 [[package]]
 name = "cgm-format"
-version = "0.12.2"
+version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "polars" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/e1/3abebf7a046a6ce93274fd613194e0e20d524ac53902d2017f4b0e9604f0/cgm_format-0.12.2.tar.gz", hash = "sha256:d13408ad8f6cc76b48a1bc6d730f2f634accaf3b70008e6cd19673b104fae53c", size = 591636, upload-time = "2026-08-28T20:46:42.901Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/aa/6d/fc270cf3e1424e5d716bdc1164bcecf7f93db8d77485ece092da28b6be10/cgm_format-0.13.0.tar.gz", hash = "sha256:d49e81a9b2155a8d1bd02bb9b684813a67e110bc1ba3d7c1d34c7d799f3d19c7", size = 641444, upload-time = "2026-10-21T18:13:25.896Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e9/0a/67f74ef53e1b5c82016d3ed27c40323fa389770ebbbf05c2f04f5c1f623e/cgm_format-0.12.2-py3-none-any.whl", hash = "sha256:4f0ef9d3cfa3ba4b8ff3b3bcdaf2f5d2aa3fa5612ecbac046f72b554d5c2912f", size = 164869, upload-time = "2026-08-28T20:46:40.848Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/aa/e6871f01b27dec35470662ed78882ea765ee72b8d7c608771d340690390d/cgm_format-0.13.0-py3-none-any.whl", hash = "sha256:fde405be9377c111d6c92ef00308bd32ca763487e82bad2af64032cb081b8c37", size = 185839, upload-time = "2026-10-21T18:13:24.127Z" },
 ]
 
 [[package]]
@@ -728,7 +728,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "cgm-format", specifier = ">=0.12.2" },
+    { name = "cgm-format", specifier = ">=0.13.0" },
     { name = "duckdb", specifier = ">=1.5.0" },
     { name = "eliot" },
     { name = "fastexcel", specifier = ">=0.18.0" },

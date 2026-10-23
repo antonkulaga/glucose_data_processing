@@ -14,7 +14,6 @@ import polars as pl
 from loguru import logger
 from glucose_ml_preprocessor import GlucoseMLPreprocessor
 from processing.stats_manager import print_statistics as sm_print_statistics
-from formats import DatabaseDetector
 
 app = typer.Typer(help="Glucose Data Preprocessing CLI")
 
@@ -89,7 +88,12 @@ def main(
     output_file: Optional[Path] = typer.Option(
         None,
         "--output", "-o",
-        help="Output file name (will be saved in OUTPUT folder). If not provided, filename is generated from source folder names."
+        help="Output file name (will be saved in OUTPUT folder). A .parquet name writes parquet, anything else CSV. If not provided, filename is generated from source folder names."
+    ),
+    database_type: Optional[str] = typer.Option(
+        None,
+        "--database-type", "-t",
+        help="Read every input as this database type instead of detecting it, e.g. cgm_format to read Dexcom exports through the cgm_format library (default: config 'database_type', else detected)."
     ),
     interval_minutes: Optional[int] = typer.Option(
         None,
@@ -238,6 +242,8 @@ def main(
             cli_overrides['round_precision'] = round_precision
         if max_workers is not None:
             cli_overrides['max_workers'] = max_workers
+        if database_type is not None:
+            cli_overrides['database_type'] = database_type
 
         # Create preprocessor
         if resolved_config_file:
@@ -286,12 +292,11 @@ def main(
             else:
                 logger.info(f"Starting multi-database processing pipeline for {len(validated_folders)} databases...")
         
-        # Detect database type for single input
-        database_type = None
+        # Resolve database type for single input (configured, else detected)
+        resolved_database_type = None
         if len(validated_folders) == 1:
             try:
-                db_detector = DatabaseDetector()
-                database_type = db_detector.detect_database_type(validated_folders[0])
+                resolved_database_type = preprocessor.resolve_database_type(validated_folders[0])
             except Exception as e:
                 if verbose:
                     logger.warning(f"Could not detect database type: {e}")
@@ -299,7 +304,7 @@ def main(
         # Process single or multiple databases
         if len(validated_folders) == 1:
             ml_data, statistics, _ = preprocessor.process(
-                validated_folders[0], final_output_file, database_type=database_type
+                validated_folders[0], final_output_file, database_type=resolved_database_type
             )
         else:
             ml_data, statistics, _ = preprocessor.process_multiple_databases(
